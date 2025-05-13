@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 import csv
 
 
+# 1) Validate command-line arguments
 def validate_arguments():
     if len(sys.argv) != 3:
         print("Použití: python election_scraper.py <URL_územního_celku> <výstupní_soubor.csv>")
@@ -20,6 +21,7 @@ def validate_arguments():
     url = sys.argv[1]
     output_file = sys.argv[2]
 
+    # 2) Check that the URL starts with expected prefix
     if not url.startswith("https://www.volby.cz/pls/ps2017nss/ps32?"):
         print("Neplatný odkaz! Musí začínat https://www.volby.cz/pls/ps2017nss/ps32?")
         sys.exit(1)
@@ -27,6 +29,7 @@ def validate_arguments():
     return url, output_file
 
 
+# 2) Download page and return BeautifulSoup object
 def get_soup(url):
     try:
         response = requests.get(url)
@@ -37,6 +40,7 @@ def get_soup(url):
         sys.exit(1)
 
 
+# 3) Get list of municipalities (codes, names, and their individual URLs)
 def get_municipality_links(main_soup):
     base_url = "https://www.volby.cz/pls/ps2017nss/"
     municipality_data = []
@@ -47,7 +51,7 @@ def get_municipality_links(main_soup):
         sys.exit(1)
 
     for table in tables:
-        rows = table.find_all("tr")[2:]  # Přeskoč hlavičku
+        rows = table.find_all("tr")[2:]  # Skip header rows
         for row in rows:
             cells = row.find_all("td")
             if len(cells) >= 2:
@@ -60,6 +64,7 @@ def get_municipality_links(main_soup):
     return municipality_data
 
 
+# 4) Extract names of political parties from the detail page
 def get_party_names(soup):
     party_names = []
     tables = soup.find_all("table", class_="table")
@@ -74,9 +79,9 @@ def get_party_names(soup):
     return party_names
 
 
+# 5) Parse voter statistics and votes for each party in one municipality
 def parse_municipality(soup):
     try:
-        # Získání statistických údajů z první tabulky
         stats_table = soup.find("table", class_="table")
         stats_cells = stats_table.find_all("td")
 
@@ -84,12 +89,11 @@ def parse_municipality(soup):
             print("[!] Nedostatek údajů v první tabulce.")
             return None
 
-        # Získání správných hodnot podle pořadí
         registered = int(stats_cells[3].text.replace("\xa0", "").replace(" ", ""))
         envelopes = int(stats_cells[4].text.replace("\xa0", "").replace(" ", ""))
         valid = int(stats_cells[7].text.replace("\xa0", "").replace(" ", ""))
 
-        # Hlasy pro strany (druhá a třetí tabulka)
+         # Parse votes from subsequent tables
         party_votes = []
         tables = soup.find_all("table", class_="table")[1:]
         for table in tables:
@@ -108,6 +112,7 @@ def parse_municipality(soup):
         return None
 
 
+# 6) Main function to orchestrate scraping and writing to CSV
 def scrape_data(main_url, output_file):
     main_soup = get_soup(main_url)
     municipality_list = get_municipality_links(main_soup)
@@ -116,7 +121,7 @@ def scrape_data(main_url, output_file):
         print("Nebyl nalezen žádný odkaz na obce.")
         sys.exit(1)
 
-    # První obec: zjištění názvů stran
+    # Get party names from the first municipality page
     first_soup = get_soup(municipality_list[0][2])
     party_names = get_party_names(first_soup)
 
